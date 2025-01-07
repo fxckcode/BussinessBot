@@ -1,21 +1,27 @@
 package main
 
 import (
-    "context"
-    "time"
-    "os"
+	"context"
+	"os"
+	"time"
 
-    "github.com/fxckcode/BussinessBot/ai"
-    "github.com/fxckcode/BussinessBot/cmd"
-    "github.com/fxckcode/BussinessBot/env"
-    "github.com/sirupsen/logrus"
-    tele "gopkg.in/telebot.v4"
+	"github.com/fxckcode/BussinessBot/ai"
+	"github.com/fxckcode/BussinessBot/api/models"
+	"github.com/fxckcode/BussinessBot/api/routes"
+	"github.com/fxckcode/BussinessBot/cmd"
+	"github.com/fxckcode/BussinessBot/db"
+	"github.com/fxckcode/BussinessBot/env"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/sirupsen/logrus"
+	tele "gopkg.in/telebot.v4"
 )
 
 var (
     ctx            = context.Background()
     modelAI string = "gemini-2.0-flash-exp"
     log            = logrus.New()
+    PORT = env.ViperEnvVariable("PORT")
 )
 
 func init() {
@@ -28,7 +34,7 @@ func init() {
     log.SetLevel(logrus.InfoLevel)
 }
 
-func main() {
+func startBot() {
     BotToken := env.ViperEnvVariable("TELEGRAM_BOT_TOKEN")
     pref := tele.Settings{
         Token:  BotToken,
@@ -50,12 +56,28 @@ func main() {
         duration := time.Since(start)
         log.Infof("Processed message in %s", duration)
 
-
         return c.Reply(res, tele.ModeMarkdown)
     })
 
-    cmd.ClearConsole()
-
     log.Info("Bot is running")
     b.Start()
+}
+
+func startAPI() {
+    app := fiber.New()
+    app.Use(logger.New())
+    routes.TasksRoutes(app)
+
+    db.DBConnection()
+    db.DB.AutoMigrate(models.Task{})
+
+    log.Infof("API is running on port %s", PORT)
+    app.Listen(PORT)
+}
+
+func main() {
+    cmd.ClearConsole()
+
+    go startBot()
+    startAPI()
 }
